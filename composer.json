@@ -15,12 +15,12 @@
     ],
     "require": {
         "php": "^8.5.0",
-        "cline/math": "^1.0.1"
+        "cline/math": "^2.0"
     },
     "require-dev": {
         "ext-dom": "*",
         "ext-pdo": "*",
-        "cline/coding-standard": "^1.7.0",
+        "cline/coding-standard": "^2.0",
         "ergebnis/composer-normalize": "^2.50.0",
         "orchestra/testbench": "^10.9",
         "pestphp/pest": "^4.4.1",
