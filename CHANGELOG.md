@@ -9,4 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Added repository-level maintainer guidance in `AGENTS.md`.
+- Added `Money::remainder()` and exposed `abs()` / `negated()` on
+  `AbstractMoney`, including `RationalMoney`.
+
+### Changed
+- Updated `Money::allocate()` and `Money::allocateWithRemainder()` to
+  accept `BigNumber|int|string` ratios, including decimal and rational
+  values.
 - Initial release

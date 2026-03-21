@@ -176,6 +176,24 @@ final readonly class RationalMoney extends AbstractMoney implements Stringable
     }
 
     /**
+     * Returns a RationalMoney whose value is the absolute value of this RationalMoney.
+     */
+    #[Override()]
+    public function abs(): static
+    {
+        return new self($this->amount->abs(), $this->currency);
+    }
+
+    /**
+     * Returns a RationalMoney whose value is the negated value of this RationalMoney.
+     */
+    #[Override()]
+    public function negated(): static
+    {
+        return new self($this->amount->negated(), $this->currency);
+    }
+
+    /**
      * Returns this RationalMoney unchanged, as it is already in rational form.
      */
     #[Override()]

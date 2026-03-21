@@ -256,6 +256,16 @@ abstract readonly class AbstractMoney implements JsonSerializable, Monetary, Str
     abstract public function getCurrency(): Currency;
 
     /**
+     * Returns a money whose value is the absolute value of this money.
+     */
+    abstract public function abs(): static;
+
+    /**
+     * Returns a money whose value is the negated value of this money.
+     */
+    abstract public function negated(): static;
+
+    /**
      * Returns the amount of the given parameter.
      *
      * If the parameter is a money, its currency is checked against this money's currency.

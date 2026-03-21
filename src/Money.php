@@ -33,9 +33,7 @@ use Stringable;
 
 use function array_fill;
 use function array_map;
-use function array_sum;
 use function array_values;
-use function intdiv;
 use function is_float;
 use function is_int;
 
@@ -454,6 +452,31 @@ final readonly class Money extends AbstractMoney implements Stringable
     }
 
     /**
+     * Returns the remainder of the division of this Money by the given number.
+     *
+     * The given number must be an integer value. The resulting Money has the same context as this Money.
+     * This method can serve as a basis for a money allocation algorithm.
+     *
+     * @param BigNumber|int|string $that The divisor. Must be convertible to a BigInteger.
+     *
+     * @throws MathException If the divisor cannot be converted to a BigInteger.
+     */
+    public function remainder(BigNumber|int|string $that): self
+    {
+        $that = BigInteger::of($that);
+        $step = $this->context->getStep();
+
+        $scale = $this->amount->getScale();
+        $amount = $this->amount->withPointMovedRight($scale);
+        $amount = $amount->dividedBy($step, $amount->getScale(), RoundingMode::Unnecessary);
+
+        $r = $amount->remainder($that);
+        $r = $r->multipliedBy($step)->withPointMovedLeft($scale);
+
+        return new self($r, $this->currency, $this->context);
+    }
+
+    /**
      * Returns the quotient and the remainder of the division of this Money by the given number.
      *
      * The given number must be an integer value. The resulting monies have the same context as this Money.
@@ -495,30 +518,17 @@ final readonly class Money extends AbstractMoney implements Stringable
      *
      * The resulting monies have the same context as this Money.
      *
-     * @param int ...$ratios The ratios.
+     * @param BigNumber|int|string ...$ratios The ratios.
      *
      * @throws EmptyAllocationRatiosException   If no ratios are provided.
      * @throws NegativeAllocationRatioException If any ratio is negative.
      * @throws ZeroAllocationRatiosException    If all ratios sum to zero.
      * @return array<self>
      */
-    public function allocate(int ...$ratios): array
+    public function allocate(BigNumber|int|string ...$ratios): array
     {
-        if ($ratios === []) {
-            throw EmptyAllocationRatiosException::forMethod('allocate()');
-        }
-
-        foreach ($ratios as $ratio) {
-            if ($ratio < 0) {
-                throw NegativeAllocationRatioException::forMethod('allocate()');
-            }
-        }
-
-        $total = array_sum($ratios);
-
-        if ($total === 0) {
-            throw ZeroAllocationRatiosException::forMethod('allocate()');
-        }
+        $ratios = $this->normalizeRatios($ratios, 'allocate()');
+        $total = BigInteger::sum(...$ratios);
 
         $step = $this->context->getStep();
 
@@ -561,40 +571,24 @@ final readonly class Money extends AbstractMoney implements Stringable
      *
      * The resulting monies have the same context as this Money.
      *
-     * @param int ...$ratios The ratios.
+     * @param BigNumber|int|string ...$ratios The ratios.
      *
      * @throws EmptyAllocationRatiosException   If no ratios are provided.
      * @throws NegativeAllocationRatioException If any ratio is negative.
      * @throws ZeroAllocationRatiosException    If all ratios sum to zero.
      * @return array<self>
      */
-    public function allocateWithRemainder(int ...$ratios): array
+    public function allocateWithRemainder(BigNumber|int|string ...$ratios): array
     {
-        if ($ratios === []) {
-            throw EmptyAllocationRatiosException::forMethod('allocateWithRemainder()');
-        }
-
-        foreach ($ratios as $ratio) {
-            if ($ratio < 0) {
-                throw NegativeAllocationRatioException::forMethod('allocateWithRemainder()');
-            }
-        }
-
-        $total = array_sum($ratios);
-
-        if ($total === 0) {
-            throw ZeroAllocationRatiosException::forMethod('allocateWithRemainder()');
-        }
-
-        $ratios = $this->simplifyRatios(array_values($ratios));
-        $total = array_sum($ratios);
+        $ratios = $this->normalizeRatios($ratios, 'allocateWithRemainder()');
+        $total = BigInteger::sum(...$ratios);
 
         [, $remainder] = $this->quotientAndRemainder($total);
 
         $toAllocate = $this->minus($remainder);
 
         $monies = array_map(
-            fn (int $ratio): Money => $toAllocate->multipliedBy($ratio)->dividedBy($total),
+            fn (BigInteger $ratio): Money => $toAllocate->multipliedBy($ratio)->dividedBy($total),
             $ratios,
         );
 
@@ -883,31 +877,52 @@ final readonly class Money extends AbstractMoney implements Stringable
     }
 
     /**
-     * Reduces a list of ratios by dividing each by their greatest common divisor.
+     * Normalizes allocation ratios into the smallest equivalent whole-number ratios.
      *
-     * Simplifying ratios before allocation avoids intermediate values that are larger than necessary,
-     * which keeps the arithmetic efficient and the remainder as small as possible.
+     * @param array<BigNumber|int|string> $ratios
      *
-     * @param non-empty-list<int> $ratios
-     *
-     * @return non-empty-list<int>
+     * @return non-empty-list<BigInteger>
      */
-    private function simplifyRatios(array $ratios): array
+    private function normalizeRatios(array $ratios, string $method): array
     {
-        $gcd = $this->gcdOfMultipleInt($ratios);
+        if ($ratios === []) {
+            throw EmptyAllocationRatiosException::forMethod($method);
+        }
 
-        return array_map(fn (int $ratio): int => intdiv($ratio, $gcd), $ratios);
-    }
+        $ratios = array_map(
+            BigRational::of(...),
+            array_values($ratios),
+        );
 
-    /**
-     * Returns the greatest common divisor of a list of integers.
-     *
-     * @param non-empty-list<int> $values
-     */
-    private function gcdOfMultipleInt(array $values): int
-    {
-        $values = array_map(BigInteger::of(...), $values);
+        foreach ($ratios as $ratio) {
+            if ($ratio->isNegative()) {
+                throw NegativeAllocationRatioException::forMethod($method);
+            }
+        }
 
-        return BigInteger::gcdAll(...$values)->toInt();
+        $total = BigRational::sum(...$ratios);
+
+        if ($total->isZero()) {
+            throw ZeroAllocationRatiosException::forMethod($method);
+        }
+
+        $denominators = array_map(
+            fn (BigRational $ratio): BigInteger => $ratio->getDenominator(),
+            $ratios,
+        );
+        $multiplier = BigInteger::lcmAll(...$denominators);
+
+        $ratios = array_map(
+            fn (BigRational $ratio): BigInteger => $ratio->getNumerator()
+                ->multipliedBy($multiplier->quotient($ratio->getDenominator())),
+            $ratios,
+        );
+
+        $gcd = BigInteger::gcdAll(...$ratios);
+
+        return array_map(
+            fn (BigInteger $ratio): BigInteger => $ratio->quotient($gcd),
+            $ratios,
+        );
     }
 }

@@ -137,6 +137,21 @@ dataset('providerSimplified', fn (): array => [
     [['368022/405840', 'EUR'], 'EUR 61337/67640'],
     [['-671244/45600', 'GBP'], 'GBP -55937/3800'],
 ]);
+test('abs', function (array $rationalMoney, string $expected): void {
+    self::assertRationalMoneyEquals($expected, RationalMoney::of(...$rationalMoney)->abs());
+})->with('providerAbs');
+dataset('providerAbs', fn (): array => [
+    [['-1', 'EUR'], 'EUR 1'],
+    [['-7/3', 'USD'], 'USD 7/3'],
+    [['5/2', 'JPY'], 'JPY 5/2'],
+]);
+test('negated', function (array $rationalMoney, string $expected): void {
+    self::assertRationalMoneyEquals($expected, RationalMoney::of(...$rationalMoney)->negated());
+})->with('providerNegated');
+dataset('providerNegated', fn (): array => [
+    [['1.234', 'EUR'], 'EUR -617/500'],
+    [['-2', 'JPY'], 'JPY 2'],
+]);
 test('to', function (array $rationalMoney, Context $context, RoundingMode $roundingMode, string $expected): void {
     $rationalMoney = RationalMoney::of(...$rationalMoney);
 
